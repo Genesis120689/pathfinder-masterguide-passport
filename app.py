@@ -1,6 +1,7 @@
 import os, sqlite3, json, hashlib, hmac, secrets, datetime, io, pathlib, base64, binascii
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from itsdangerous import URLSafeSerializer, BadSignature
@@ -24,6 +25,11 @@ else:
   except OSError: pass
  SECRET=secret_file.read_text(encoding='utf8').strip()
 app=FastAPI(title='Pathfinder & Master Guide Digital Passport')
+app.mount(
+    "/static",
+    StaticFiles(directory=str(BASE)),
+    name="static"
+)
 app.add_middleware(SessionMiddleware, secret_key=SECRET, same_site='lax', https_only=os.getenv('HTTPS_ONLY')=='1')
 signer=URLSafeSerializer(SECRET,salt='passport-qr')
 def conn():

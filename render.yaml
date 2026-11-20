@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: pathfinder-master-guide-passport
+    runtime: python
+    plan: starter
+    rootDir: pathfinder_passport
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers
+    healthCheckPath: /healthz
+    disk:
+      name: passport-data
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 5
+    envVars:
+      - key: PASSPORT_DATA_DIR
+        value: /opt/render/project/src/storage
+      - key: HTTPS_ONLY
+        value: '1'
+      - key: CERTIFICATION_ENABLED
+        value: '0'
+      - key: PASSPORT_SECRET
+        generateValue: true
+      - key: PASSPORT_SETUP_TOKEN
+        sync: false

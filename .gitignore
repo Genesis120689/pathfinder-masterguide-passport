@@ -1,0 +1,9 @@
+**/passport.db
+**/.instance_secret
+**/.setup_token
+**/storage/
+**/assets/announcements/
+**/assets/master_guide_logo.png
+**/__pycache__/
+**/*.pyc
+.env

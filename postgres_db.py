@@ -88,7 +88,7 @@ class Connection:
         sql = sql.strip()
         if sql.upper() == "BEGIN IMMEDIATE":
             return Cursor(self.raw.execute("SELECT 1"))
-        sql = re.sub(r'"(admin|completed|pending|mg|director|mission|ssd|club|masterguide|trainee)"', r"'\1'", sql)
+        sql = re.sub(r'"([a-z_]+)"', lambda m: "'" + m.group(1) + "'", sql)
         sql = sql.replace("INSERT OR IGNORE INTO ", "INSERT INTO ")
         ignore = "INSERT OR IGNORE" in sql.upper() or (
             sql.startswith("INSERT INTO approvals(") or

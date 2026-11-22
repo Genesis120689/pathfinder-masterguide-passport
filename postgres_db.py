@@ -97,7 +97,7 @@ class Connection:
         if ignore and "ON CONFLICT" not in sql.upper():
             sql += " ON CONFLICT DO NOTHING"
         sql = sql.replace("?", "%s")
-        inserted = bool(re.match(r"INSERT INTO (clubs|users|announcements|events)\\b", sql, re.I))
+        inserted = bool(re.match(r"INSERT INTO (clubs|users|announcements|events)\b", sql, re.I))
         if inserted and "RETURNING" not in sql.upper():
             sql += " RETURNING id"
         cur = self.raw.execute(sql, params)

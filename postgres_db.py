@@ -89,8 +89,9 @@ class Connection:
         if sql.upper() == "BEGIN IMMEDIATE":
             return Cursor(self.raw.execute("SELECT 1"))
         sql = re.sub(r'"([a-z_]+)"', lambda m: "'" + m.group(1) + "'", sql)
+        was_ignore = sql.upper().startswith("INSERT OR IGNORE INTO ")
         sql = sql.replace("INSERT OR IGNORE INTO ", "INSERT INTO ")
-        ignore = "INSERT OR IGNORE" in sql.upper() or (
+        ignore = was_ignore or (
             sql.startswith("INSERT INTO approvals(") or
             sql.startswith("INSERT INTO appointments(")
         )

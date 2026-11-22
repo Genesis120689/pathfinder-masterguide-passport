@@ -1,4 +1,4 @@
-import os, sqlite3, json, hashlib, hmac, secrets, datetime, io, pathlib, base64, binascii
+import os, json, hashlib, hmac, secrets, datetime, io, pathlib, base64, binascii
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +9,7 @@ import qrcode
 BASE=pathlib.Path(__file__).parent
 DATA_DIR=pathlib.Path(os.getenv('PASSPORT_DATA_DIR', str(BASE))).expanduser().resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-DB=DATA_DIR/'passport.db'
+DB=None  # Supabase PostgreSQL
 CAT=json.loads((BASE/'requirements.json').read_text(encoding='utf8'))
 SOURCES=json.loads((BASE/'requirements_sources.json').read_text())
 LEVELS=['Friend','Companion','Explorer','Ranger','Voyager','Guide','Master Guide']
@@ -32,8 +32,7 @@ app.mount(
 )
 app.add_middleware(SessionMiddleware, secret_key=SECRET, same_site='lax', https_only=os.getenv('HTTPS_ONLY')=='1')
 signer=URLSafeSerializer(SECRET,salt='passport-qr')
-def conn():
- c=sqlite3.connect(DB);c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON');return c
+from postgres_db import connect as conn, IntegrityError
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def password_hash(p):
  salt=os.urandom(16);return (salt+hashlib.pbkdf2_hmac('sha256',p.encode(),salt,240000)).hex()
@@ -43,14 +42,8 @@ def password_check(p, saved):
  except: return False
 def init():
  with conn() as c:
-  c.executescript('''CREATE TABLE IF NOT EXISTS clubs(id INTEGER PRIMARY KEY,name TEXT NOT NULL,mission TEXT NOT NULL,church TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT NOT NULL,username TEXT UNIQUE NOT NULL,password TEXT NOT NULL,role TEXT NOT NULL,club_id INTEGER,level TEXT NOT NULL DEFAULT 'Friend',certified INTEGER NOT NULL DEFAULT 0,created TEXT NOT NULL, FOREIGN KEY(club_id) REFERENCES clubs(id));
-  CREATE TABLE IF NOT EXISTS progress(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,level TEXT NOT NULL,req_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'not_started',submitted_by INTEGER,approved_by INTEGER,updated TEXT,notes TEXT,UNIQUE(user_id,level,req_key));
-  CREATE TABLE IF NOT EXISTS approvals(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,kind TEXT NOT NULL,stage TEXT NOT NULL,approved_by INTEGER NOT NULL,created TEXT NOT NULL,UNIQUE(user_id,kind,stage));
-  CREATE TABLE IF NOT EXISTS audits(id INTEGER PRIMARY KEY,actor INTEGER,subject INTEGER,action TEXT,detail TEXT,created TEXT);
-  CREATE TABLE IF NOT EXISTS appointments(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,stage TEXT NOT NULL,approved_by INTEGER NOT NULL,created TEXT NOT NULL,UNIQUE(user_id,stage));
-  CREATE TABLE IF NOT EXISTS announcements(id INTEGER PRIMARY KEY,title TEXT NOT NULL,body TEXT NOT NULL,image_path TEXT,created_by INTEGER NOT NULL,created TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY,title TEXT NOT NULL,description TEXT NOT NULL,starts_at TEXT NOT NULL,ends_at TEXT,location TEXT,scope TEXT NOT NULL,club_id INTEGER,created_by INTEGER NOT NULL,created TEXT NOT NULL);''')
+  from postgres_db import SCHEMA
+  c.executescript(SCHEMA)
   # First-run administrator is chosen by the owner via local setup with a one-time token.
   # Existing databases and administrator records remain unchanged.
   if not c.execute('SELECT 1 FROM users WHERE role="admin"').fetchone():
@@ -176,7 +169,7 @@ def create_user(body:NewUser,req:Request):
  with conn() as c:
   try:
    cur=c.execute('INSERT INTO users(name,username,password,role,club_id,level,created) VALUES(?,?,?,?,?,?,?)',(body.name,body.username.strip().lower(),password_hash(body.password),body.role,(None if body.role=='admin' else body.club_id),('Administration' if body.role=='admin' else body.level),now()));audit(c,u,cur.lastrowid,'create_user',body.role);return {'id':cur.lastrowid}
-  except sqlite3.IntegrityError:raise HTTPException(400,'Username exists or club is invalid')
+  except IntegrityError:raise HTTPException(400,'Username exists or club is invalid')
 @app.get('/api/progress/{user_id}')
 def progress(user_id:int,req:Request):
  u=need(req)
